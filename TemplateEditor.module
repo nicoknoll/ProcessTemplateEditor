@@ -1,0 +1,213 @@
+<?php
+
+class TemplateEditor extends Process implements Module {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Template Editor', 
+			'version' => '1.00', 
+			'summary' => 'Change the templates on the fly.',
+			'singular' => true, 
+			'autoload' => false, 
+			);
+	}
+
+	/**
+	 * Name used for the page created in the admin
+	 *
+	 */
+	const adminPageName = 'template-editor';
+
+
+	/**
+	 * Initialize the module
+	 *
+	 */
+	public function init() {
+		parent::init();
+		ini_set('auto_detect_line_endings', true);
+	}
+
+	/**
+	 * Shows a list of the templates
+	 *
+	 */
+	public function ___execute() {
+
+
+		$table = $this->modules->get('MarkupAdminDataTable');
+		$table->setSortable(true); 
+		$table->setEncodeEntities(false);
+		$header = array('Name');
+		$table->headerRow($header);
+
+		// we get all pages using these templates
+
+		$files = glob($config->paths->templates.'*.*'); 
+
+		if(count($files)) {
+
+			foreach($files as $file) {	
+				if($file){
+					$table->row(array(
+						'<a href="edit/?file='.basename($file).'">'.basename($file).'</a>'
+					));
+				} 
+			}
+		}
+
+		return '<form id="form" action="./delete/" method="post">' . $table->render() . '</form>'.$scripts;
+	}
+
+	/**
+	 * Shows edit form
+	 *
+	 */
+
+	public function ___executeEdit() {
+
+		$this->fuel('breadcrumbs')->add(new Breadcrumb('../', 'Template Editor')); 
+
+		$this->setFuel('processHeadline', "Edit Template");
+		$file = $config->paths->templates.$_GET['file'];
+		$handle = fopen($file, 'r+');
+		$content = fread($handle, filesize($file));
+		fclose($handle);
+		
+		return $this->buildForm($_GET['file'], $content).'<script src="http://d1n0x3qji82z53.cloudfront.net/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
+		<script>
+			var editor = ace.edit("editor");
+			editor.setTheme("ace/theme/xcode");
+			editor.setShowPrintMargin(false);
+			editor.getSession().setMode("ace/mode/javascript");
+		</script>';
+		
+	}
+
+
+
+
+	protected function buildForm($filename, $filecontent) {
+	
+		$form = $this->modules->get("InputfieldForm"); 
+		$form->method = 'post';		
+		$form->action = '../save/';	
+		$form->attr('onSubmit', "document.getElementById('Inputfield_file_content').value = editor.getSession().getValue()");
+		//$form->description = "";
+
+
+		$f = $this->modules->get("InputfieldText"); 
+		$f->name = 'file_name';
+		$f->label = 'Name';
+		$f->attr('value', $filename); 
+		$f->description = 'Be carfull with this. If you\'re changing the file name you have to change the template\'s name, too, manually.';
+		$f->collapsed = Inputfield::collapsedNo;
+		$form->add($f); 
+		
+		$f = $this->modules->get("InputfieldMarkup"); 
+		$f->name = 'file_content_editor';
+		$f->label = 'Content';
+		$f->collapsed = Inputfield::collapsedNo; 
+		$f->value = '<div id="editor" style="width:100%;height:700px;position:relative;">'.htmlentities($filecontent).'</div>';
+		$form->add($f); 
+		
+		$f = $this->modules->get("InputfieldHidden"); 
+		$f->name = 'file_content';
+		$f->attr('value', ''); 
+		$form->add($f);
+	
+		$f = $this->modules->get("InputfieldHidden"); 
+		$f->name = 'file_name_original';
+		$f->attr('value', $filename); 
+		$form->add($f);
+	
+		$f = $this->modules->get("InputfieldButton");
+		$f->type = 'submit';
+		$f->id = 'file_submit';
+		$f->value = 'Save template';
+		$form->add($f); 
+		
+		return $form->render(); 
+	}
+	
+
+
+/**
+ * Save the changes
+ *
+ */
+
+public function ___executeSave() {
+
+	$file = $config->paths->templates.$_POST['file_name_original'];
+	$handle = fopen($file, 'w+');
+	$content = fwrite($handle, $_POST['file_content']);
+	fclose($handle);
+	
+	if($_POST['file_name'] != $_POST['file_name_original']) {
+		rename($config->paths->templates.$_POST['file_name_original'], $config->paths->templates.$_POST['file_name']);
+	}
+	
+	$this->message('Template saved successfully.');
+	$this->session->redirect('../');
+	
+}
+
+
+
+
+	/**
+	 * Install the module and create the page where it lives
+	 *
+	 */
+	public function ___install() {
+
+		if(ProcessWire::versionMajor == 2 && ProcessWire::versionMinor < 1) {
+			throw new WireException("This module requires ProcessWire 2.1 or newer"); 
+		}
+
+		$page = $this->getInstalledPage();
+		$this->message("Installed to {$page->path}"); 
+	}
+
+	protected function getInstalledPage() {
+
+		$admin = $this->pages->get($this->config->adminRootPageID); 
+		$parent = $admin->child("name=setup"); 
+
+		$page = $parent->child("name=" . self::adminPageName); 
+
+		if(!$page->id) { 	
+			$first = $parent->child("name=template");
+
+			$page = new Page();
+			$page->parent = $parent; 
+			$page->template = $this->templates->get('admin');
+			$page->name = self::adminPageName; 
+			$page->title = "Template Editor";
+			$page->process = $this; 
+			$page->sort = $first->sort;
+			$page->save();
+
+			$first->sort--;
+			$first->save(); 
+		}
+
+		return $page; 	
+	}
+
+
+	/**
+	 * Uninstall the module
+	 *
+	 */
+	public function ___uninstall() {
+		$page = $this->getInstalledPage();	
+		if($page->id) { 
+			$this->message("Removed {$page->path} successfully.");
+			$this->pages->delete($page); 
+		}
+	}
+
+}
+?>
