@@ -5,7 +5,7 @@ class TemplateEditor extends Process implements Module {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Template Editor', 
-			'version' => '1.01', 
+			'version' => '1.02', 
 			'summary' => 'Change the templates on the fly.',
 			'singular' => true, 
 			'autoload' => false, 
@@ -58,7 +58,7 @@ class TemplateEditor extends Process implements Module {
 			}
 		}
 
-		return '<form id="form" action="./delete/" method="post">' . $table->render() . '</form>'.$scripts;
+		return $table->render();
 	}
 
 	/**
@@ -71,17 +71,18 @@ class TemplateEditor extends Process implements Module {
 		$this->fuel('breadcrumbs')->add(new Breadcrumb('../', 'Template Editor')); 
 
 		$this->setFuel('processHeadline', "Edit Template");
-		$file = $config->paths->templates.$_GET['file'];
+		$file = $this->config->paths->templates . $this->sanitizer->name(basename($this->input->get->file)); 
+		if(!is_file($file)) throw new WireException("Template file not found"); 
 		$handle = fopen($file, 'r+');
 		$content = fread($handle, filesize($file));
 		fclose($handle);
-		
-		return $this->buildForm($_GET['file'], $content);
-		
+
+		return $this->buildForm($this->input->get('file'), $content);
+
 	}
 
 	protected function buildForm($filename, $filecontent) {
-	
+
 		$form = $this->modules->get("InputfieldForm"); 
 		$form->method = 'post';		
 		$form->action = '../save/';	
@@ -94,7 +95,7 @@ class TemplateEditor extends Process implements Module {
 		$f->description = 'Be carfull with this. If you\'re changing the file name you have to change the template\'s name, too, manually.';
 		$f->collapsed = Inputfield::collapsedNo;
 		$form->add($f); 
-		
+
 		$f = $this->modules->get("InputfieldAceEditor"); 
 		$f->name = 'file_content';
 		$f->label = 'Content';
@@ -102,21 +103,21 @@ class TemplateEditor extends Process implements Module {
 		$f->value = $filecontent;
 		$f->rows = 30;
 		$form->add($f); 
-	
+
 		$f = $this->modules->get("InputfieldHidden"); 
 		$f->name = 'file_name_original';
 		$f->attr('value', $filename); 
 		$form->add($f);
-	
+
 		$f = $this->modules->get("InputfieldButton");
 		$f->type = 'submit';
 		$f->id = 'file_submit';
 		$f->value = 'Save template';
 		$form->add($f); 
-		
+
 		return $form->render(); 
 	}
-	
+
 
 
 /**
@@ -126,18 +127,20 @@ class TemplateEditor extends Process implements Module {
 
 public function ___executeSave() {
 
-	$file = $config->paths->templates.$_POST['file_name_original'];
+	$file = $this->config->paths->templates . $this->sanitizer->name(basename($this->input->post('file_name_original'))); 
+	if(!is_file($file)) throw new WireException("Template file not found"); 
+
 	$handle = fopen($file, 'w+');
-	$content = fwrite($handle, $_POST['file_content']);
+	$content = fwrite($handle, $this->input->post('file_content'));
 	fclose($handle);
-	
-	if($_POST['file_name'] != $_POST['file_name_original']) {
-		rename($config->paths->templates.$_POST['file_name_original'], $config->paths->templates.$_POST['file_name']);
+
+	if($this->input->post('file_name') != $this->input->post('file_name_original')) {
+		rename($config->paths->templates.$this->input->post('file_name_original'), $config->paths->templates.$this->input->post('file_name'));
 	}
-	
+
 	$this->message('Template saved successfully.');
 	$this->session->redirect('../');
-	
+
 }
 
 
