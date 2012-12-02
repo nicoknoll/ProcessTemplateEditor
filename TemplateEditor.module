@@ -5,10 +5,12 @@ class TemplateEditor extends Process implements Module {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Template Editor', 
-			'version' => '1.00', 
+			'version' => '1.01', 
 			'summary' => 'Change the templates on the fly.',
 			'singular' => true, 
 			'autoload' => false, 
+			'author' => 'Nico Knoll',
+			'requires' => array('InputfieldAceEditor')
 			);
 	}
 
@@ -74,27 +76,16 @@ class TemplateEditor extends Process implements Module {
 		$content = fread($handle, filesize($file));
 		fclose($handle);
 		
-		return $this->buildForm($_GET['file'], $content).'<script src="http://d1n0x3qji82z53.cloudfront.net/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
-		<script>
-			var editor = ace.edit("editor");
-			editor.setTheme("ace/theme/xcode");
-			editor.setShowPrintMargin(false);
-			editor.getSession().setMode("ace/mode/javascript");
-		</script>';
+		return $this->buildForm($_GET['file'], $content);
 		
 	}
-
-
-
 
 	protected function buildForm($filename, $filecontent) {
 	
 		$form = $this->modules->get("InputfieldForm"); 
 		$form->method = 'post';		
 		$form->action = '../save/';	
-		$form->attr('onSubmit', "document.getElementById('Inputfield_file_content').value = editor.getSession().getValue()");
 		//$form->description = "";
-
 
 		$f = $this->modules->get("InputfieldText"); 
 		$f->name = 'file_name';
@@ -104,17 +95,13 @@ class TemplateEditor extends Process implements Module {
 		$f->collapsed = Inputfield::collapsedNo;
 		$form->add($f); 
 		
-		$f = $this->modules->get("InputfieldMarkup"); 
-		$f->name = 'file_content_editor';
+		$f = $this->modules->get("InputfieldAceEditor"); 
+		$f->name = 'file_content';
 		$f->label = 'Content';
 		$f->collapsed = Inputfield::collapsedNo; 
-		$f->value = '<div id="editor" style="width:100%;height:700px;position:relative;">'.htmlentities($filecontent).'</div>';
+		$f->value = $filecontent;
+		$f->rows = 30;
 		$form->add($f); 
-		
-		$f = $this->modules->get("InputfieldHidden"); 
-		$f->name = 'file_content';
-		$f->attr('value', ''); 
-		$form->add($f);
 	
 		$f = $this->modules->get("InputfieldHidden"); 
 		$f->name = 'file_name_original';
@@ -162,8 +149,8 @@ public function ___executeSave() {
 	 */
 	public function ___install() {
 
-		if(ProcessWire::versionMajor == 2 && ProcessWire::versionMinor < 1) {
-			throw new WireException("This module requires ProcessWire 2.1 or newer"); 
+		if(ProcessWire::versionMajor == 2 && ProcessWire::versionMinor < 2) {
+			throw new WireException("This module requires ProcessWire 2.2 or newer"); 
 		}
 
 		$page = $this->getInstalledPage();
