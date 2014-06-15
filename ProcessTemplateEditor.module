@@ -6,7 +6,7 @@ class ProcessTemplateEditor extends Process implements Module {
 		return array(
 			'title' => 'Template Editor', 
 			'version' => '1.2.0', 
-			'summary' => 'Change the templates on the fly.',
+			'summary' => __('Change the templates on the fly.'),
 			'singular' => true, 
 			'autoload' => false, 
 			'author' => 'Nico Knoll'
@@ -33,7 +33,7 @@ class ProcessTemplateEditor extends Process implements Module {
 		$table = $this->modules->get('MarkupAdminDataTable');
 		$table->setSortable(true); 
 		$table->setEncodeEntities(false);
-		$header = array('Name');
+		$header = array($this->_('Name'));
 		$table->headerRow($header);
 
 		// we get all pages using these templates
@@ -109,11 +109,11 @@ class ProcessTemplateEditor extends Process implements Module {
 
 	public function ___executeEdit() {
 
-		$this->fuel('breadcrumbs')->add(new Breadcrumb('../', 'Template Editor')); 
+		$this->fuel('breadcrumbs')->add(new Breadcrumb('../', $this->_('Template Editor'))); 
 
-		$this->setFuel('processHeadline', "Edit Template");
+		$this->setFuel('processHeadline', $this->_("Edit Template"));
 		$file = $this->config->paths->templates . $this->sanitizer->text($this->basename_relative($this->input->get->file)); 
-		if(!is_file($file)) throw new WireException("Template file not found"); 
+		if(!is_file($file)) throw new WireException($this->_("Template file not found")); 
 		
 		$content = '';
 		$filetype = $this->get_mime_type($file);
@@ -136,9 +136,9 @@ class ProcessTemplateEditor extends Process implements Module {
 
 		$f = $this->modules->get("InputfieldText"); 
 		$f->name = 'file_name';
-		$f->label = 'Name';
+		$f->label = $this->_('Name');
 		$f->attr('value', basename($filename)); 
-		$f->notes = 'Be careful with this. If you\'re changing the file name you probably have to change the template\'s name manually, too.';
+		$f->notes = $this->_('Be careful with this. If you\'re changing the file name you probably have to change the template\'s name manually, too.');
 		$f->collapsed = Inputfield::collapsedNo;
 		$form->add($f); 
 		
@@ -149,8 +149,8 @@ class ProcessTemplateEditor extends Process implements Module {
 		if($filetype == 'text' || ($filetype == 'inode' && strlen($filecontent) == 0)) {
 			$f = $this->modules->get("InputfieldTextarea");
 			$f->name = 'file_content'; 
-			$f->label = 'Content';
-			$f->description = ((strlen($filecontent) == 0) ? 'File is empty so no media type could be detected.' : '');
+			$f->label = $this->_('Content');
+			$f->description = ((strlen($filecontent) == 0) ? $this->_('File is empty so no media type could be detected.') : '');
 			$f->collapsed = Inputfield::collapsedNo; 
 			$f->value = $filecontent;
 			$f->rows = 30;
@@ -158,19 +158,19 @@ class ProcessTemplateEditor extends Process implements Module {
 		} else {
 			switch($filetype) {
 				default:
-					$fieldvalue = '<p>Preview doesn\'t support "'.$filetype.'" media type.';
+					$fieldvalue = sprintf($this->_('<p>Preview doesn\'t support "%s" media type.'), $filetype);
 				break;
 				case 'image':
 					$fieldvalue = '<img style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'">';
 				break;
 				case 'audio':
 					$fieldvalue = '<audio style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'" preload="auto" controls>
-						<p>Your browser doesn\'t support the audio tag or the given file format.					
+						'.$this->_('<p>Your browser doesn\'t support the audio tag or the given file format.</p>').'				
 					</audio>';
 				break;
 				case 'video':
 					$fieldvalue = '<video style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'" preload="auto" controls>
-						<p>Your browser doesn\'t support the video tag or the given file format.					
+						'.$this->_('<p>Your browser doesn\'t support the video tag or the given file format.</p>').'				
 					</video>';
 				break;
 			}
@@ -178,7 +178,7 @@ class ProcessTemplateEditor extends Process implements Module {
 			
 			$f = $this->modules->get("InputfieldMarkup");
 			$f->name = 'file_preview'; 
-			$f->label = 'Preview';
+			$f->label = $this->_('Preview');
 			$f->collapsed = Inputfield::collapsedNo; 
 			$f->value = $fieldvalue;
 			$form->add($f); 
@@ -198,7 +198,7 @@ class ProcessTemplateEditor extends Process implements Module {
 		$f = $this->modules->get("InputfieldButton");
 		$f->type = 'submit';
 		$f->id = 'file_submit';
-		$f->value = 'Save template';
+		$f->value = $this->_('Save file');
 		$form->add($f); 
 
 		return $form->render(); 
@@ -228,7 +228,7 @@ public function ___executeSave() {
 	$renameSucess = true;
 	
 	$file = $this->config->paths->templates . $this->sanitizer->text($this->basename_relative($this->input->post('file_name_original'))); 
-	if(!is_file($file)) throw new WireException("Template file not found"); 
+	if(!is_file($file)) throw new WireException($this->_("Template file not found")); 
 	
 	// only change file if it has mime type "text" (means file_preview_url is not defined)
 	if($this->input->post('file_preview_url') == '') {
@@ -245,10 +245,10 @@ public function ___executeSave() {
 	}
 	
 	if($renameSucess) {
-		$this->message('File saved successfully.');
+		$this->message($this->_('File saved successfully.'));
 		$this->session->redirect('../edit/?file='.$filename);
 	} else {
-		$this->error('File could not be renamed.');
+		$this->error($this->_('File could not be renamed.'));
 		$this->session->redirect('../edit/?file='.$this->input->post('file_name_original'));
 	}
 
@@ -264,11 +264,11 @@ public function ___executeSave() {
 	public function ___install() {
 
 		if(ProcessWire::versionMajor == 2 && ProcessWire::versionMinor < 2) {
-			throw new WireException("This module requires ProcessWire 2.2 or newer"); 
+			throw new WireException($this->_("This module requires ProcessWire 2.2 or newer")); 
 		}
 
 		$page = $this->getInstalledPage();
-		$this->message("Installed to {$page->path}"); 
+		$this->message(sprintf($this->_("Installed to %s"), $page->path)); 
 	}
 
 	protected function getInstalledPage() {
@@ -285,7 +285,7 @@ public function ___executeSave() {
 			$page->parent = $parent; 
 			$page->template = $this->templates->get('admin');
 			$page->name = "template-editor"; 
-			$page->title = "Template Editor";
+			$page->title = $this->_("Template Editor");
 			$page->process = $this; 
 			$page->sort = $first->sort;
 			$page->save();
@@ -305,7 +305,7 @@ public function ___executeSave() {
 	public function ___uninstall() {
 		$page = $this->getInstalledPage();	
 		if($page->id) { 
-			$this->message("Removed {$page->path} successfully.");
+			$this->message(sprintf($this->_("Removed %s successfully."), $page->path));
 			$this->pages->delete($page); 
 		}
 	}
