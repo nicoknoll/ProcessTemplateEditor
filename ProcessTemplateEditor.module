@@ -1,0 +1,314 @@
+<?php
+
+class ProcessTemplateEditor extends Process implements Module {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Template Editor', 
+			'version' => '1.2.0', 
+			'summary' => 'Change the templates on the fly.',
+			'singular' => true, 
+			'autoload' => false, 
+			'author' => 'Nico Knoll'
+			);
+	}
+
+
+	/**
+	 * Initialize the module
+	 *
+	 */
+	public function init() {
+		parent::init();
+		ini_set('auto_detect_line_endings', true);
+	}
+
+	/**
+	 * Shows a list of the templates
+	 *
+	 */
+	public function ___execute() {
+
+
+		$table = $this->modules->get('MarkupAdminDataTable');
+		$table->setSortable(true); 
+		$table->setEncodeEntities(false);
+		$header = array('Name');
+		$table->headerRow($header);
+
+		// we get all pages using these templates
+
+		$files = $this->rglob('*.*', 0, $this->config->paths->templates); 
+
+		if(count($files)) {
+
+			foreach($files as $file) {	
+				if($file){
+					$table->row(array(
+						$this->make_link($this->basename_relative($file))
+					));
+				} 
+			}
+		}
+
+		return $table->render();
+	}
+	
+	
+	
+	
+	
+	private function basename_relative($path) {
+		$root = $this->config->paths->templates;
+		
+		$return = str_replace($root, '', $path);
+		
+		return $return;
+	}
+	
+	private function make_link($path) {
+		$path_split = explode('/', $path);
+		
+		$basename = array_pop($path_split);
+		
+		$return = implode(' / ', $path_split);
+		$return .= ((count($path_split) > 0) ? ' / ' : '');
+		$return .= '<a href="edit/?file='.$path.'">'.$basename.'</a>';
+		
+		return $return;
+	}
+	
+	
+	
+	
+	// helper
+	private function rglob($pattern = '*', $flags = 0, $path = '') {
+		$paths = @glob($path.'*', GLOB_MARK|GLOB_ONLYDIR|GLOB_NOSORT);
+		$files = array();
+		$files = @glob($path.$pattern, $flags);
+		sort($files);
+	
+		foreach ($paths as $path) { $files = @array_merge((array)$files,(array)$this->rglob($pattern, $flags, $path)); }
+	
+		foreach($files as $key => $file) {
+			if($file == '' || $file == false || !$file) {
+				unset($files[$key]);
+			}
+		}
+	
+		return $files;
+	}
+	
+	
+	
+
+	/**
+	 * Shows edit form
+	 *
+	 */
+
+	public function ___executeEdit() {
+
+		$this->fuel('breadcrumbs')->add(new Breadcrumb('../', 'Template Editor')); 
+
+		$this->setFuel('processHeadline', "Edit Template");
+		$file = $this->config->paths->templates . $this->sanitizer->text($this->basename_relative($this->input->get->file)); 
+		if(!is_file($file)) throw new WireException("Template file not found"); 
+		
+		$content = '';
+		$filetype = $this->get_mime_type($file);
+		if($filetype == 'text' || $filetype == 'inode') {
+			$handle = fopen($file, 'r+');
+			$content = ((filesize($file) > 0) ? fread($handle, filesize($file)) : '');
+			fclose($handle);
+		}
+
+		return $this->buildForm($this->input->get('file'), $content);
+
+	}
+
+	protected function buildForm($filename, $filecontent) {
+
+		$form = $this->modules->get("InputfieldForm"); 
+		$form->method = 'post';		
+		$form->action = '../save/';	
+		//$form->description = "";
+
+		$f = $this->modules->get("InputfieldText"); 
+		$f->name = 'file_name';
+		$f->label = 'Name';
+		$f->attr('value', basename($filename)); 
+		$f->notes = 'Be careful with this. If you\'re changing the file name you probably have to change the template\'s name manually, too.';
+		$f->collapsed = Inputfield::collapsedNo;
+		$form->add($f); 
+		
+		
+		// If this is a text file show text - otherwise display the image or video or whatever
+		$filetype = $this->get_mime_type($filename);
+		
+		if($filetype == 'text' || ($filetype == 'inode' && strlen($filecontent) == 0)) {
+			$f = $this->modules->get("InputfieldTextarea");
+			$f->name = 'file_content'; 
+			$f->label = 'Content';
+			$f->description = ((strlen($filecontent) == 0) ? 'File is empty so no media type could be detected.' : '');
+			$f->collapsed = Inputfield::collapsedNo; 
+			$f->value = $filecontent;
+			$f->rows = 30;
+			$form->add($f); 
+		} else {
+			switch($filetype) {
+				default:
+					$fieldvalue = '<p>Preview doesn\'t support "'.$filetype.'" media type.';
+				break;
+				case 'image':
+					$fieldvalue = '<img style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'">';
+				break;
+				case 'audio':
+					$fieldvalue = '<audio style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'" preload="auto" controls>
+						<p>Your browser doesn\'t support the audio tag or the given file format.					
+					</audio>';
+				break;
+				case 'video':
+					$fieldvalue = '<video style="max-width:100%;height:auto;" src="'.$this->config->urls->templates.$filename.'" preload="auto" controls>
+						<p>Your browser doesn\'t support the video tag or the given file format.					
+					</video>';
+				break;
+			}
+			
+			
+			$f = $this->modules->get("InputfieldMarkup");
+			$f->name = 'file_preview'; 
+			$f->label = 'Preview';
+			$f->collapsed = Inputfield::collapsedNo; 
+			$f->value = $fieldvalue;
+			$form->add($f); 
+			
+			$f = $this->modules->get("InputfieldHidden");
+			$f->name = 'file_preview_url'; 
+			$f->label = 'Preview Helper';
+			$f->value = $filename;
+			$form->add($f);
+		}
+
+		$f = $this->modules->get("InputfieldHidden"); 
+		$f->name = 'file_name_original';
+		$f->attr('value', $filename); 
+		$form->add($f);
+
+		$f = $this->modules->get("InputfieldButton");
+		$f->type = 'submit';
+		$f->id = 'file_submit';
+		$f->value = 'Save template';
+		$form->add($f); 
+
+		return $form->render(); 
+	}
+	
+	
+	
+	private function get_mime_type($filename) {
+		// get mime type
+		$finfo = finfo_open(FILEINFO_MIME_TYPE);					
+		$fileinfo = finfo_file($finfo, $filename);
+		$filetype = dirname($fileinfo);
+		finfo_close($finfo);
+		
+		return $filetype;
+	}
+
+
+
+/**
+ * Save the changes
+ *
+ */
+
+public function ___executeSave() {
+	
+	$renameSucess = true;
+	
+	$file = $this->config->paths->templates . $this->sanitizer->text($this->basename_relative($this->input->post('file_name_original'))); 
+	if(!is_file($file)) throw new WireException("Template file not found"); 
+	
+	// only change file if it has mime type "text" (means file_preview_url is not defined)
+	if($this->input->post('file_preview_url') == '') {
+		$handle = fopen($file, 'w+');
+		$content = fwrite($handle, $this->input->post('file_content'));
+		fclose($handle);
+	}
+	
+	// create new filename
+	$filename = dirname($this->input->post('file_name_original')).'/'.$this->input->post('file_name');
+	
+	if($filename != $this->input->post('file_name_original')) {
+		$renameSucess = rename($this->config->paths->templates.$this->input->post('file_name_original'), $this->config->paths->templates.$filename);
+	}
+	
+	if($renameSucess) {
+		$this->message('File saved successfully.');
+		$this->session->redirect('../edit/?file='.$filename);
+	} else {
+		$this->error('File could not be renamed.');
+		$this->session->redirect('../edit/?file='.$this->input->post('file_name_original'));
+	}
+
+}
+
+
+
+
+	/**
+	 * Install the module and create the page where it lives
+	 *
+	 */
+	public function ___install() {
+
+		if(ProcessWire::versionMajor == 2 && ProcessWire::versionMinor < 2) {
+			throw new WireException("This module requires ProcessWire 2.2 or newer"); 
+		}
+
+		$page = $this->getInstalledPage();
+		$this->message("Installed to {$page->path}"); 
+	}
+
+	protected function getInstalledPage() {
+
+		$admin = $this->pages->get($this->config->adminRootPageID); 
+		$parent = $admin->child("name=setup"); 
+
+		$page = $parent->child("name=template-editor"); 
+
+		if(!$page->id) { 	
+			$first = $parent->child("name=template");
+
+			$page = new Page();
+			$page->parent = $parent; 
+			$page->template = $this->templates->get('admin');
+			$page->name = "template-editor"; 
+			$page->title = "Template Editor";
+			$page->process = $this; 
+			$page->sort = $first->sort;
+			$page->save();
+
+			$first->sort--;
+			$first->save(); 
+		}
+
+		return $page; 	
+	}
+
+
+	/**
+	 * Uninstall the module
+	 *
+	 */
+	public function ___uninstall() {
+		$page = $this->getInstalledPage();	
+		if($page->id) { 
+			$this->message("Removed {$page->path} successfully.");
+			$this->pages->delete($page); 
+		}
+	}
+
+}
+?>
