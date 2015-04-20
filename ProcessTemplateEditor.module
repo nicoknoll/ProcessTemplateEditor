@@ -13,7 +13,7 @@
 *
 */
 
-class ProcessTemplateEditor extends Process implements Module {
+class ProcessTemplateEditor extends Process implements Module, ConfigurableModule {
 
 	public static function getModuleInfo() {
 		return array(
@@ -28,7 +28,6 @@ class ProcessTemplateEditor extends Process implements Module {
 				'parent' => 'setup',
 				'title' => __('Template Editor')
 			)
-			
 		);
 	}
 
@@ -40,6 +39,21 @@ class ProcessTemplateEditor extends Process implements Module {
 	public function init() {
 		parent::init();
 		ini_set('auto_detect_line_endings', true);
+	}
+	
+	
+	
+	static private function getDefaults() {
+		return array(
+			'inputfieldClass' => 'InputfieldTextarea'
+		);
+	}
+
+	
+	public function __construct() {
+		foreach(self::getDefaults() as $key => $value) {
+			$this->$key = $value;
+		}
 	}
 
 
@@ -131,7 +145,7 @@ class ProcessTemplateEditor extends Process implements Module {
 			$filetype = $this->get_mime_type($filename);
 			
 			if($filetype == 'text' || ($filetype == 'inode' && strlen($filecontent) == 0)) {
-				$f = $this->modules->get("InputfieldTextarea");
+				$f = $this->modules->get($this->inputfieldClass);
 				$f->name = 'file_content'; 
 				$f->label = $this->_('Content');
 				$f->description = ((strlen($filecontent) == 0) ? $this->_('File is empty so no media type could be detected.') : '');
@@ -241,6 +255,31 @@ class ProcessTemplateEditor extends Process implements Module {
 	
 	}
 
+
+	
+	static public function getModuleConfigInputfields(array $data) {
+		$inputfields = new InputfieldWrapper();
+		$defaults = self::getDefaults();
+		$data = array_merge($defaults, $data);
+		
+		$f = wire('modules')->get('InputfieldSelect');
+		$f->attr('name', 'inputfieldClass'); 
+		$f->label = 'Inputfield Type';
+		$f->description = "The type of field that will be used to collect input (Textarea is the default). ";
+		$f->required = true; 
+		$f->value = $data['inputfieldClass'];
+		
+		$baseClass = "InputfieldTextarea";
+		foreach(wire('modules')->find("className^=Inputfield") as $fm) {
+			if("$fm" == $baseClass || is_subclass_of("$fm", $baseClass)) 
+				$f->addOption("$fm", str_replace("Inputfield", '', "$fm")); 
+		}
+		
+		$inputfields->append($f); 	
+		
+		return $inputfields; 
+		
+	}
 
 
 	
